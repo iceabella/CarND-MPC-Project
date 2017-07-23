@@ -70,8 +70,12 @@ int main() {
 
   // MPC is initialized here!
   MPC mpc;
+  
+  // define maximum values for steering and throttle
+  const double max_steer = 1.0;
+  const double max_throttle = 1.0;
 
-  h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&mpc, &max_steer, &max_throttle](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -98,8 +102,49 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+                    
+          // fit a 3rd order polynomial to the x and y coordinates
+          Eigen::VectorXd coeffs = polyfit(ptsx, ptsy, 3);
+          // calculate the cross track error
+          double cte = polyeval(coeffs,px) - py;
+          // get the derivative f'(x)
+          Eigen::VectorXd fp_coeffs(coeffs.size()-1);
+          for (int i = 0; i < coeffs.size()-1; i++) 
+            fp_coeffs(i) = coeffs(i+1)*(i+1);
+          // calculate orientation error 
+          double epsi = psi - atan(polyeval(fp_coeffs,px));  
+          
+          Eigen::VectorXd state(6);
+          state << px, py, psi, v, cte, epsi;
+
+          /*std::vector<double> x_vals = {state[0]};
+          std::vector<double> y_vals = {state[1]};
+          std::vector<double> psi_vals = {state[2]};
+          std::vector<double> v_vals = {state[3]};
+          std::vector<double> cte_vals = {state[4]};
+          std::vector<double> epsi_vals = {state[5]};
+          std::vector<double> delta_vals = {};
+          std::vector<double> a_vals = {};*/
+              
+          vector<double> vars = mpc.solve(state, coeffs);
+          
+          // get the actuation values
+          double steer_value = vars[6];
+          double throttle_value = vars[7];
+
+          // normalize steering values to get values between [-1, 1] instead of [-deg2rad(25), deg2rad(25)]
+          steer_value = steer_value/deg2rad(25);
+          // Make sure steering values are within min and max limit
+          if(steer_value > max_steer)
+            steer_value = max_steer;
+          if(steer_value < -max_steer)
+            steer_value = -max_steer;
+            
+          // Make sure trottle values are within min and max limit
+          if(throttle_value > max_throttle)
+            throttle_value = max_throttle;
+          if(throttle_value < -max_throttle)
+            throttle_value = -max_throttle;
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
