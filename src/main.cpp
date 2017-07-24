@@ -102,20 +102,28 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
+          
+          // Transform waypoints in map coordinates to vehicle coordinates
+          Eigen::VectorXd ptsx_v(ptsx.size());
+          Eigen::VectorXd ptsy_v(ptsy.size());
+          for(size_t i=0; i<ptsx.size(); i++){
+            ptsx_v[i] = (ptsx[i] - px) * cos(psi) + (ptsy[i] - py) * sin(psi);
+            ptsy_v[i] = -(ptsx[i] - px) * sin(psi) + (ptsy[i] - py) * cos(psi);
+          }
                     
           // fit a 3rd order polynomial to the x and y coordinates
-          Eigen::VectorXd coeffs = polyfit(ptsx, ptsy, 3);
+          Eigen::VectorXd coeffs = polyfit(ptsx_v, ptsy_v, 3);
           // calculate the cross track error
-          double cte = polyeval(coeffs,px) - py;
+          double cte = polyeval(coeffs,0); // f(x) - y, where (x,y) = (0,0) since local coordinates
           // get the derivative f'(x)
           Eigen::VectorXd fp_coeffs(coeffs.size()-1);
           for (int i = 0; i < coeffs.size()-1; i++) 
             fp_coeffs(i) = coeffs(i+1)*(i+1);
           // calculate orientation error 
-          double epsi = psi - atan(polyeval(fp_coeffs,px));  
+          double epsi = - atan(polyeval(fp_coeffs,0));  // epsi = psi - atan(f'(x)) where local heading is 0 and evaluated in point x=0
           
           Eigen::VectorXd state(6);
-          state << px, py, psi, v, cte, epsi;
+          state << 0, 0, 0, v, cte, epsi; // x,y,psi = 0 in local coordinates
 
           /*std::vector<double> x_vals = {state[0]};
           std::vector<double> y_vals = {state[1]};
@@ -126,7 +134,7 @@ int main() {
           std::vector<double> delta_vals = {};
           std::vector<double> a_vals = {};*/
               
-          vector<double> vars = mpc.solve(state, coeffs);
+          vector<double> vars = mpc.Solve(state, coeffs);
           
           // get the actuation values
           double steer_value = vars[6];
