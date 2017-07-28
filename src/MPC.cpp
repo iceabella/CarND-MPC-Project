@@ -6,11 +6,11 @@
 using CppAD::AD;
 
 // TODO: Set the timestep length and duration
-size_t N = 20;
+size_t N = 10;
 double dt = 0.1;
 
 // Set reference velocity
-double ref_v = 40;
+double ref_v = 30;
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should establish
@@ -52,12 +52,24 @@ class FG_eval {
 
     // DEFINE COST ********* ADD MORE ADVANCED COST **********
     fg[0] = 0;
+    // The part of the cost based on the reference state.
     for (size_t t = 0; t < N; t++) {
       fg[0] += CppAD::pow(vars[cte_start + t], 2);
       fg[0] += CppAD::pow(vars[epsi_start + t], 2);
       fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
     
+    // Minimize the use of actuators.
+    for (size_t t = 0; t < N - 1; t++) {
+      fg[0] += 500*CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += CppAD::pow(vars[a_start + t], 2);
+    }
+
+    // Minimize the value gap between sequential actuations.
+    for (size_t t = 0; t < N - 2; t++) {
+      fg[0] += CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+    }
     
     // SET UP MODEL CONSTRAINTS
     
@@ -76,7 +88,7 @@ class FG_eval {
     // create derivative of polynomial i.e. f'(x)
     Eigen::VectorXd fp_coeffs(coeffs.size()-1);
     for (int i = 0; i < coeffs.size()-1; i++) 
-      fp_coeffs(i) = coeffs(i+1)*(i+1);
+      fp_coeffs[i] = coeffs[i+1]*(i+1);
     //std::cout << "fp_coeffs: " << fp_coeffs << std::endl;
   
     // The rest of the constraints
@@ -102,15 +114,19 @@ class FG_eval {
       // Setup the model constraints
       fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
       fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
-      fg[1 + psi_start + t] = psi1 - (psi0 - v0/Lf * delta0 * CppAD::sin(epsi0) * dt);
+      fg[1 + psi_start + t] = psi1 - (psi0 - v0/Lf * delta0 * dt); 
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
-      fg[1 + cte_start + t] = cte1 - (cte0 + v0 * CppAD::sin(epsi0) * dt); //maybe UPDATE
+      CppAD::AD<double> f0 = 0;
+      // calculate f(x0)
+      for(int i = 0; i<coeffs.size(); i++)
+        f0 += coeffs[i]*CppAD::pow(x0,i); 
+      fg[1 + cte_start + t] = cte1 - (f0-y0 + v0 * CppAD::sin(epsi0) * dt); 
       CppAD::AD<double> fp_x0 = 0;
       // calculate f'(x0)
       for(int i = 0; i<fp_coeffs.size(); i++)
         fp_x0 += fp_coeffs[i]*CppAD::pow(x0,i); 
       
-      fg[1 + epsi_start + t] = epsi1 - (psi0 - CppAD::atan(fp_x0) + v0/Lf * delta0 * dt);
+      fg[1 + epsi_start + t] = epsi1 - (psi0 - CppAD::atan(fp_x0) - v0/Lf * delta0 * dt);
     }
   }
 };
@@ -173,7 +189,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // The upper and lower limits of delta are set to -25 and 25
   // degrees (values in radians).
   for (size_t i = delta_start; i < a_start; i++) {
-    vars_lowerbound[i] = -0.436332;
+    vars_lowerbound[i] = -0.436332; 
     vars_upperbound[i] = 0.436332;
   }
 
@@ -182,7 +198,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
     vars_lowerbound[i] = -1.0;
     vars_upperbound[i] = 1.0;
   } 
-
+  
   // Lower and upper limits for the constraints
   // Should be 0 besides initial state.
   Dvector constraints_lowerbound(n_constraints);
@@ -247,8 +263,11 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   //
   // {...} is shorthand for creating a vector, so auto x1 = {1.0,2.0}
   // creates a 2 element double vector.
-  return {solution.x[x_start + 1],   solution.x[y_start + 1],
-          solution.x[psi_start + 1], solution.x[v_start + 1],
-          solution.x[cte_start + 1], solution.x[epsi_start + 1],
-          solution.x[delta_start],   solution.x[a_start]};
+  vector<double> solution_return = {solution.x[delta_start],   solution.x[a_start]};
+  for(size_t i = 0; i<N-1; i++){
+    solution_return.push_back(solution.x[x_start + i + 1]);
+    solution_return.push_back(solution.x[y_start + i + 1]);
+  }
+   
+  return solution_return;
 }
