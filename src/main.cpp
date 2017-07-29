@@ -74,14 +74,18 @@ int main() {
   // define maximum values for steering and throttle
   const double max_steer = 1.0;
   const double max_throttle = 1.0;
+  
+  // initialize variable to store previous time stamp
+  std::chrono::time_point<std::chrono::system_clock> prev_time;
+  bool prev_meas = false;
 
-  h.onMessage([&mpc, &max_steer, &max_throttle](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&mpc, &max_steer, &max_throttle, &prev_time, &prev_meas](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     string sdata = string(data).substr(0, length);
-    cout << sdata << endl;
+    //cout << sdata << endl;
     if (sdata.size() > 2 && sdata[0] == '4' && sdata[1] == '2') {
       string s = hasData(sdata);
       if (s != "") {
@@ -95,9 +99,32 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double steer_value = j[1]["steering_angle"];
+          double throttle_value = j[1]["throttle"];
+          
+          // Initialize time value          
+          if(prev_meas){
+            // define start time as now
+            prev_time = std::chrono::system_clock::now();
+            prev_meas = true;
+          }
+          
+          // Get time interval between measurements (latency) 
+          std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-prev_time;
+          double dt_latency = elapsed_seconds.count();
+          std::cout << "dt_lat real: " << dt_latency << std::endl;
+          
+          // save time stamp of this data to be used in next cycle
+          prev_time = std::chrono::system_clock::now();
           
           // Convert speed from mph to m/s
-          v *= 0.44704; 
+          v *= 0.44704;
+          
+          // convert steer value to radians
+          double delta = steer_value*deg2rad(25);
+          
+          // acceleration is estimated to be the same as throttle
+          double a = throttle_value;
 
           /*
           * TODO: Calculate steering angle and throttle using MPC.
@@ -125,14 +152,30 @@ int main() {
           // calculate orientation error 
           double epsi = - atan(polyeval(fp_coeffs,0));  // epsi = psi - atan(f'(x)) where local heading is 0 and evaluated in point x=0
           
+          // Updated states for x,y,psi because of vehicle coordinate system
+          px = 0;
+          py = 0;
+          psi = 0;
+          
+          // UPDATE INITIAL STATE BECAUSE OF LATENCY
+          //double dt_latency = 0.1; // in s, i.e. 100ms
+          double Lf = 2.67; // length from front to CoG
+          
+          double px_latency = px + v * cos(psi) * dt_latency;
+          double py_latency = py + v * sin(psi) * dt_latency;
+          double psi_latency = psi - v/Lf * delta * dt_latency;
+          double v_latency = v + a * dt_latency;
+          double cte_latency = cte + v * sin(epsi) * dt_latency;
+          double epsi_latency = epsi - v/Lf * delta * dt_latency;  
+          
           Eigen::VectorXd state(6);
-          state << 0, 0, 0, v, cte, epsi; // x,y,psi = 0 in local coordinates
+          state << px_latency, py_latency, psi_latency, v_latency, cte_latency, epsi_latency;
               
           vector<double> vars = mpc.Solve(state, coeffs);
           
-          // get the actuation values
-          double steer_value = vars[0];
-          double throttle_value = vars[1];
+          // get the updated actuation values
+          steer_value = vars[0];
+          throttle_value = vars[1];
 
           // normalize steering values to get values between [-1, 1] instead of [-deg2rad(25), deg2rad(25)]
           steer_value = steer_value/deg2rad(25);
@@ -174,9 +217,13 @@ int main() {
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
+          
+          // transform these points because of latency         
           for(int i = 0; i < ptsx_v.size(); i++){
-            next_x_vals.push_back(ptsx_v[i]);
-            next_y_vals.push_back(ptsy_v[i]);
+            double xline_latency = (ptsx_v[i] - px_latency) * cos(-psi_latency) - (ptsy_v[i] - py_latency) * sin(-psi_latency);
+            double yline_latency = (ptsx_v[i] - px_latency) * sin(-psi_latency) + (ptsy_v[i] - py_latency) * cos(-psi_latency);
+            next_x_vals.push_back(xline_latency);
+            next_y_vals.push_back(yline_latency);
           }  
 
           msgJson["next_x"] = next_x_vals;
@@ -184,7 +231,7 @@ int main() {
 
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           // Latency
           // The purpose is to mimic real driving conditions where
           // the car does actuate the commands instantly.
@@ -194,7 +241,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(100));
+          this_thread::sleep_for(chrono::milliseconds(80));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {

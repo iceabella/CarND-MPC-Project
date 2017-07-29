@@ -6,11 +6,11 @@
 using CppAD::AD;
 
 // TODO: Set the timestep length and duration
-size_t N = 10;
-double dt = 0.1;
+size_t N = 8;
+double dt = 0.15;
 
 // Set reference velocity
-double ref_v = 30;
+double ref_v = 30; // in m/s (mph*0.44704)
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should establish
@@ -50,25 +50,30 @@ class FG_eval {
     // the Solver function below.
 
 
-    // DEFINE COST ********* ADD MORE ADVANCED COST **********
+    // DEFINE COST 
     fg[0] = 0;
     // The part of the cost based on the reference state.
     for (size_t t = 0; t < N; t++) {
-      fg[0] += CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += 10*CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 2*CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 1*CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
     
     // Minimize the use of actuators.
     for (size_t t = 0; t < N - 1; t++) {
-      fg[0] += 500*CppAD::pow(vars[delta_start + t], 2);
-      fg[0] += CppAD::pow(vars[a_start + t], 2);
+      fg[0] += 1000*CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += 1*CppAD::pow(vars[a_start + t], 2);
     }
 
     // Minimize the value gap between sequential actuations.
     for (size_t t = 0; t < N - 2; t++) {
-      fg[0] += CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 200*CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 2*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+    }
+
+    // Minimize the value gap between sequential errors
+    for (size_t t = 0; t < N - 1; t++) {
+      fg[0] += 100*CppAD::pow(vars[cte_start + t + 1] - vars[cte_start + t], 2);
     }
     
     // SET UP MODEL CONSTRAINTS
