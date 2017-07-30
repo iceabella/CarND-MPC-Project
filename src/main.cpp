@@ -204,8 +204,11 @@ int main() {
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
           for(size_t i=2; i<vars.size(); i+=2){
-            mpc_x_vals.push_back(vars[i]);
-            mpc_y_vals.push_back(vars[i+1]);
+            // transform point because of latency
+            double xmpc_latency = (vars[i] - px_latency) * cos(-psi_latency) - (vars[i+1] - py_latency) * sin(-psi_latency);
+            double ympc_latency = (vars[i] - px_latency) * sin(-psi_latency) + (vars[i+1] - py_latency) * cos(-psi_latency);       
+            mpc_x_vals.push_back(xmpc_latency);
+            mpc_y_vals.push_back(ympc_latency);
           }
           
           msgJson["mpc_x"] = mpc_x_vals;
@@ -218,6 +221,17 @@ int main() {
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
           
+          // Add 15 points with a 1.0 between each x-value
+          for(double i = 1.0; i < 20; i ++){
+          double x_line = i*3.0;
+            double y_line = polyeval(coeffs,x_line);
+            // transform point because of latency
+            double xline_latency = (x_line - px_latency) * cos(-psi_latency) - (y_line - py_latency) * sin(-psi_latency);
+            double yline_latency = (x_line - px_latency) * sin(-psi_latency) + (y_line - py_latency) * cos(-psi_latency);
+            next_x_vals.push_back(xline_latency);
+            next_y_vals.push_back(yline_latency);
+          }
+          /*
           // transform these points because of latency         
           for(int i = 0; i < ptsx_v.size(); i++){
             double xline_latency = (ptsx_v[i] - px_latency) * cos(-psi_latency) - (ptsy_v[i] - py_latency) * sin(-psi_latency);
@@ -225,7 +239,7 @@ int main() {
             next_x_vals.push_back(xline_latency);
             next_y_vals.push_back(yline_latency);
           }  
-
+*/
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
@@ -241,7 +255,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(80));
+          this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
