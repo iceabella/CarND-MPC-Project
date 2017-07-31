@@ -125,13 +125,6 @@ int main() {
           
           // acceleration is estimated to be the same as throttle
           double a = throttle_value;
-
-          /*
-          * TODO: Calculate steering angle and throttle using MPC.
-          *
-          * Both are in between [-1, 1].
-          *
-          */
           
           // Transform waypoints in map coordinates to vehicle coordinates
           Eigen::VectorXd ptsx_v(ptsx.size());
@@ -158,7 +151,6 @@ int main() {
           psi = 0;
           
           // UPDATE INITIAL STATE BECAUSE OF LATENCY
-          //double dt_latency = 0.1; // in s, i.e. 100ms
           double Lf = 2.67; // length from front to CoG
           
           double px_latency = px + v * cos(psi) * dt_latency;
@@ -170,7 +162,8 @@ int main() {
           
           Eigen::VectorXd state(6);
           state << px_latency, py_latency, psi_latency, v_latency, cte_latency, epsi_latency;
-              
+          
+          // solve MPC problem    
           vector<double> vars = mpc.Solve(state, coeffs);
           
           // get the updated actuation values
@@ -192,8 +185,7 @@ int main() {
             throttle_value = -max_throttle;
 
           json msgJson;
-          // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
-          // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
+
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = throttle_value;
 
@@ -221,7 +213,7 @@ int main() {
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
           
-          // Add 15 points with a 1.0 between each x-value
+          // Add 20 points with 3.0 between each x-value
           for(double i = 1.0; i < 20; i ++){
           double x_line = i*3.0;
             double y_line = polyeval(coeffs,x_line);
@@ -231,15 +223,7 @@ int main() {
             next_x_vals.push_back(xline_latency);
             next_y_vals.push_back(yline_latency);
           }
-          /*
-          // transform these points because of latency         
-          for(int i = 0; i < ptsx_v.size(); i++){
-            double xline_latency = (ptsx_v[i] - px_latency) * cos(-psi_latency) - (ptsy_v[i] - py_latency) * sin(-psi_latency);
-            double yline_latency = (ptsx_v[i] - px_latency) * sin(-psi_latency) + (ptsy_v[i] - py_latency) * cos(-psi_latency);
-            next_x_vals.push_back(xline_latency);
-            next_y_vals.push_back(yline_latency);
-          }  
-*/
+          
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
