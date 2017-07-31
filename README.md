@@ -41,7 +41,9 @@ NOTE3: the calculation of cte(k) = f(x(k)) - y(k) is an approximation, in realit
 The MPC problem we would like to solve is to minimize our cost function (seen below) subject to the constraints that our next state is equal to the estimated next state. The minimization problem in mathematical terms:
 
 ```
-min: Sum (i=0,1,...,N) [ a1*cte(k+i)^2 + a2*epsi(k+i)^2 + a3*(v(k+i)-v_ref)^2] + Sum (i=0,1,...,N-1) [a4*delta(k+i)^2 + a5*a(k+i)^2 + a8*(cte(k+1+i)-cte(k+i))^2 + a9*(epsi(k+1+i)-epsi(k+i))^2] + Sum (i=0,1,...,N-2) [a6*(delta(k+1+i)-delta(k+i))^2 + a7*(a(k+1+i)-a(k+i))^2]
+min: Sum (i=0,1,...,N) [ a1*cte(k+i)^2 + a2*epsi(k+i)^2 + a3*(v(k+i)-v_ref)^2] 
++ Sum (i=0,1,...,N-1) [a4*delta(k+i)^2 + a5*a(k+i)^2 + a8*(cte(k+1+i)-cte(k+i))^2 + a9*(epsi(k+1+i)-epsi(k+i))^2] 
++ Sum (i=0,1,...,N-2) [a6*(delta(k+1+i)-delta(k+i))^2 + a7*(a(k+1+i)-a(k+i))^2]
 
 subject to:
 x(k) = x(k)
@@ -120,7 +122,7 @@ I didn't add a lot of importance on the cte or epsi errors since I think it star
 As seen all the parameters connected to acceleration and speed where kept low, this to make sure that low importance is given to speed and that sometimes the system can choose to brake the vehicle and reduce the speed to be able to take a turn better for example instead of keeping the speed.
 
 
-# Polynomial fitting and MPC preprocessing
+## Polynomial fitting and MPC preprocessing
 When receiving the data from the simulator transformations were made of the velocity from mph to m/s and the previous steering value was transformed from [-1,1] to [deg2rad(-25),deg2rad(25)]. Note that during the whole project the assumption was that acceleration was directly proportional to throttle value (this is not correct in reality).
 
 Since the vehicle and map information is received in a global coordinate system a coordinate transform to the vehicle coordinate system was made. This is done by converting the reference trajectory points to vehicle coordinates according to:
@@ -134,7 +136,7 @@ A third order polynomial is thereafter fit to the reference points in vehicle co
 
 The state is also updated because of latency before sent into the MPC solver, which will be described further in the next section.
 
-# Latency handling
+## Latency handling
 To resemble a real system a latency of 100ms was added (which on my PC resulted in a total latency of around 150ms). This delay will cause the vehicle to predict from an earlier state than it actually is at when actuating the calculated controls. To correct this I was predicting where the vehicle will be after the latency time by using the kinematic update equations described in "The Model" section, but with the use of latency time as dt. This new state was thereafter seen as the first state and the next predictions were based on this state, i.e. this was the state I was sending into the MPC controller. Note that both this state and all the further estimations was still in the reference frame of the vehicle position when the measurement was received.
 
 To be able to calculate the new state the last steering and throttle values were used from the simulator. 
