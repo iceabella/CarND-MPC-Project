@@ -1,6 +1,14 @@
 # CarND-Controls-MPC
 This is my implementation of the MPC project for Udacity's Self-Driving Car Engineer Nanodegree Program, the last project of term 2.
 
+## Project introduction
+In this project a MPC is used to calculate the most optimal throttle and steering angle for driving actuations for driving around a test track in [this Udacity simulator](https://github.com/udacity/self-driving-car-sim/releases). The inputs to the MPC from the simulator are vehicle and map information in global coordinates, which will be used to calculate the actuation values based on an estimated cross track error to the reference trajectory. Additionally is a latency of 100ms present in the implementation, which will be needed to take into consideration.
+
+To define the MPC problem the following needs to be defined:
+1. Model
+2. Cost
+3. Constraints
+
 ## The model
 The vehicle is in this project modelled by a kinematic bicycle model. The state of the vehicle is described by:
 
